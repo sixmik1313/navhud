@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>NAV HUD // MIL-SPEC</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+:root {
+  --g:   #00ff41;
+  --g2:  #00cc33;
+  --gd:  rgba(0,255,65,0.08);
+  --r:   #ff003c;
+  --b:   #00d4ff;
+  --o:   #ffaa00;
+  --y:   #ffee00;
+  --bg:  #010902;
+  --pan: rgba(1,10,3,0.97);
+  --brd: rgba(0,255,65,0.16);
+}
+
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  width:100%; height:100%; overflow:hidden;
+  background:var(--bg); color:var(--g);
+  font-family:'Share Tech Mono',monospace;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+}
+
+/* Scanlines */
+body::before {
+  content:''; position:fixed; inset:0; z-index:900; pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.09) 3px,rgba(0,0,0,0.09) 4px);
+}
+body::after {
+  content:''; position:fixed; inset:0; z-index:899; pointer-events:none;
+  background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.7) 100%);
+}
+
+/* ══ LAYOUT ══ */
+#app { position:fixed; inset:0; display:flex; flex-direction:column; }
+
+/* ── HEADER ── */
+header {
+  height:44px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 14px;
+  background:var(--pan); border-bottom:1px solid var(--brd);
+  z-index:20;
+}
+.logo {
+  font-family:'Orbitron',sans-serif; font-weight:900; font-size:.9rem;
+  letter-spacing:.4em;
+  text-shadow:0 0 10px var(--g), 0 0 30px var(--g);
+  animation:pulse 4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100%{text-shadow:0 0 10px var(--g),0 0 30px var(--g);}
+  50%{text-shadow:0 0 18px var(--g),0 0 55px var(--g),0 0 80px var(--g);}
+}
+.htime { font-size:.65rem; letter-spacing:.08em; color:var(--b); }
+.hrec { display:flex; align-items:center; gap:6px; font-size:.55rem; opacity:.65; }
+.rdot { width:6px;height:6px;border-radius:50%;background:var(--r);animation:blink .9s step-end infinite; }
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0;}}
+
+/* ── BODY ── */
+.body { flex:1; display:grid; overflow:hidden;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr auto;
+  gap:1px; background:var(--brd);
+}
+.body > * { background:var(--bg); }
+
+/* ── COMPASS PANEL ── */
+#compass-panel {
+  grid-column:1/2; grid-row:1/2;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:12px; position:relative; gap:8px;
+}
+#compass-canvas { display:block; }
+
+.heading-tape {
+  width:100%; height:28px; position:relative; overflow:hidden;
+  border:1px solid var(--brd); background:rgba(0,0,0,.5);
+}
+.tape-inner {
+  position:absolute; top:0; height:100%;
+  display:flex; align-items:center;
+  font-size:.5rem; letter-spacing:.05em; white-space:nowrap;
+  transition:transform .1s linear;
+}
+.tape-mark { 
+  display:flex; flex-direction:column; align-items:center;
+  width:30px; flex-shrink:0; gap:2px;
+}
+.tape-mark.major .tm-line { height:10px; background:var(--g); }
+.tape-mark.minor .tm-line { height:6px; background:rgba(0,255,65,.4); }
+.tm-line { width:1px; }
+.tm-label { font-size:.45rem; color:var(--g); opacity:.7; }
+.tape-center {
+  position:absolute; top:0; left:50%; transform:translateX(-50%);
+  width:2px; height:100%; background:var(--y);
+  box-shadow:0 0 6px var(--y);
+}
+/* Heading big display */
+.hdg-big {
+  font-family:'Orbitron',sans-serif; font-weight:900; font-size:2.2rem;
+  color:var(--g); text-shadow:0 0 16px var(--g);
+  letter-spacing:.05em; line-height:1;
+}
+.hdg-card {
+  font-family:'Orbitron',sans-serif; font-size:.75rem; letter-spacing:.3em;
+  color:var(--y); text-shadow:0 0 8px var(--y);
+}
+
+/* ── GPS / DATA PANEL ── */
+#data-panel {
+  grid-column:2/3; grid-row:1/2;
+  display:flex; flex-direction:column; gap:0; overflow-y:auto;
+}
+
+/* ── ACCEL / GYRO PANEL (bottom) ── */
+#motion-panel {
+  grid-column:1/3; grid-row:2/3;
+  display:flex; gap:1px; height:130px; background:var(--brd);
+}
+#motion-panel > * { background:var(--bg); flex:1; padding:8px 12px; }
+
+/* ── DATA CELLS ── */
+.dsec { border-bottom:1px solid var(--brd); padding:9px 12px; }
+.dsec-t {
+  font-family:'Orbitron',sans-serif; font-size:.48rem;
+  letter-spacing:.2em; opacity:.4; margin-bottom:6px;
+  padding-bottom:3px; border-bottom:1px solid rgba(0,255,65,.08);
+}
+.drow { display:flex; justify-content:space-between; align-items:baseline; margin:3px 0; font-size:.62rem; }
+.dval { color:var(--b); font-weight:bold; font-size:.72rem; }
+.dval.green { color:var(--g); }
+.dval.orange { color:var(--o); }
+.dval.red { color:var(--r); }
+.dlabel { opacity:.5; font-size:.55rem; }
+
+/* GPS coords */
+.coords-big {
+  font-family:'Orbitron',sans-serif; font-size:.65rem;
+  color:var(--g); letter-spacing:.05em; line-height:1.8;
+}
+.acc-badge {
+  display:inline-block; font-size:.48rem; padding:2px 6px;
+  border:1px solid; letter-spacing:.1em;
+}
+.acc-high{border-color:var(--g);color:var(--g);}
+.acc-mid{border-color:var(--o);color:var(--o);}
+.acc-low{border-color:var(--r);color:var(--r);}
+
+/* Horizon / attitude indicator */
+#horizon-canvas { display:block; }
+
+/* Gyro bars */
+.gyro-bars { display:flex; flex-direction:column; gap:5px; margin-top:6px; }
+.gbar-row { display:flex; align-items:center; gap:6px; font-size:.55rem; }
+.gbar-label { width:18px; opacity:.5; }
+.gbar-track { flex:1; height:5px; background:rgba(0,255,65,.1); border:1px solid var(--brd); position:relative; }
+.gbar-fill { position:absolute; top:0; height:100%; transition:width .1s, left .1s; }
+.gbar-center { position:absolute; top:-2px; left:50%; width:1px; height:9px; background:rgba(0,255,65,.3); }
+.gbar-val { width:42px; text-align:right; color:var(--b); font-size:.55rem; }
+
+/* Accel vector */
+.avec-wrap { margin-top:8px; }
+.avec-row { display:flex; align-items:center; gap:6px; font-size:.55rem; margin:2px 0; }
+.avec-label { width:16px; opacity:.5; }
+.avec-bar { flex:1; height:4px; background:rgba(0,0,0,.4); border:1px solid var(--brd); overflow:hidden; }
+.avec-fill { height:100%; transition:width .1s; }
+.avec-val { width:40px; text-align:right; color:var(--b); font-size:.55rem; }
+
+/* Speed / altitude big */
+.big-metric { text-align:center; padding:4px 0; }
+.bm-val { font-family:'Orbitron',sans-serif; font-weight:700; font-size:1.4rem; color:var(--g); }
+.bm-unit { font-size:.55rem; opacity:.5; letter-spacing:.1em; }
+.bm-label { font-size:.48rem; opacity:.4; letter-spacing:.15em; margin-bottom:2px; }
+
+/* START */
+#start {
+  position:fixed; inset:0; z-index:800;
+  background:rgba(1,6,2,.97);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+}
+.slogo {
+  font-family:'Orbitron',sans-serif; font-weight:900;
+  font-size:clamp(1.6rem,5vw,3rem); letter-spacing:.4em; text-align:center;
+  text-shadow:0 0 18px var(--g), 0 0 55px var(--g); animation:pulse 2s ease-in-out infinite;
+}
+.ssub { font-size:.68rem; opacity:.4; letter-spacing:.2em; text-align:center; }
+.sfeats { font-size:.6rem; opacity:.55; text-align:center; line-height:2;
+  border:1px solid var(--brd); padding:10px 18px; max-width:310px; }
+.sfeats em { color:var(--o); font-style:normal; }
+.sbtn {
+  font-family:'Orbitron',sans-serif; font-size:.8rem; letter-spacing:.3em;
+  padding:12px 36px; background:transparent; color:var(--g); border:2px solid var(--g); cursor:pointer;
+  box-shadow:0 0 16px rgba(0,255,65,.2); transition:all .2s;
+}
+.sbtn:hover,.sbtn:active{background:var(--g);color:#000;box-shadow:0 0 45px rgba(0,255,65,.9);}
+.perms-note { font-size:.55rem; opacity:.35; text-align:center; max-width:280px; line-height:1.8; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <div class="logo">◈ NAV·HUD</div>
+    <div class="hrec"><div class="rdot"></div><span id="htime" class="htime">--:--:--</span></div>
+  </header>
+
+  <div class="body">
+
+    <!-- ═══ COMPASS ═══ -->
+    <div id="compass-panel">
+      <canvas id="compass-canvas"></canvas>
+      <div class="hdg-big" id="hdg-num">---°</div>
+      <div class="hdg-card" id="hdg-card">---</div>
+      <div class="heading-tape" id="tape">
+        <div class="tape-inner" id="tape-inner"></div>
+        <div class="tape-center"></div>
+      </div>
+    </div>
+
+    <!-- ═══ GPS + DATA ═══ -->
+    <div id="data-panel">
+      <div class="dsec">
+        <div class="dsec-t">// POSITION GPS</div>
+        <div class="coords-big" id="coords-lat">LAT: ---.------°</div>
+        <div class="coords-big" id="coords-lon">LON: ---.------°</div>
+        <div style="margin-top:5px;display:flex;gap:8px;align-items:center;">
+          <span class="dlabel">PRÉCISION</span>
+          <span class="acc-badge acc-low" id="gps-acc">-- m</span>
+          <span class="dlabel" id="gps-sats">-- SAT</span>
+        </div>
+      </div>
+
+      <div class="dsec">
+        <div class="dsec-t">// ALTITUDE & VITESSE</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <div class="big-metric">
+            <div class="bm-label">ALTITUDE</div>
+            <div class="bm-val" id="alt-val">---</div>
+            <div class="bm-unit">MÈTRES</div>
+          </div>
+          <div class="big-metric">
+            <div class="bm-label">VITESSE</div>
+            <div class="bm-val" id="spd-val">---</div>
+            <div class="bm-unit">KM/H</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dsec">
+        <div class="dsec-t">// CAP MAGNÉTIQUE</div>
+        <div class="drow"><span class="dlabel">CAP VRAI</span><span class="dval green" id="hdg-true">---°</span></div>
+        <div class="drow"><span class="dlabel">VARIATION</span><span class="dval" id="mag-var">---°</span></div>
+        <div class="drow"><span class="dlabel">ROLL</span><span class="dval orange" id="roll-val">---°</span></div>
+        <div class="drow"><span class="dlabel">PITCH</span><span class="dval orange" id="pitch-val">---°</span></div>
+      </div>
+
+      <div class="dsec">
+        <div class="dsec-t">// SYSTÈME</div>
+        <div class="drow"><span class="dlabel">GPS</span><span class="dval" id="sys-gps">INACTIF</span></div>
+        <div class="drow"><span class="dlabel">GYRO</span><span class="dval" id="sys-gyro">INACTIF</span></div>
+        <div class="drow"><span class="dlabel">ACCEL</span><span class="dval" id="sys-accel">INACTIF</span></div>
+        <div class="drow"><span class="dlabel">UPTIME</span><span class="dval" id="sys-up">00:00</span></div>
+      </div>
+    </div>
+
+    <!-- ═══ MOTION BOTTOM ═══ -->
+    <div id="motion-panel">
+
+      <!-- Artificial horizon -->
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <div class="dsec-t" style="border:none;margin:0;padding:0;">// HORIZON ARTIFICIEL</div>
+        <canvas id="horizon-canvas"></canvas>
+      </div>
+
+      <!-- Gyro -->
+      <div style="display:flex;flex-direction:column;gap:4px;overflow:hidden;">
+        <div class="dsec-t" style="border:none;margin:0;padding:0;">// GYROSCOPE (°/s)</div>
+        <div class="gyro-bars" id="gyro-bars">
+          <div class="gbar-row"><span class="gbar-label">X</span><div class="gbar-track"><div class="gbar-center"></div><div class="gbar-fill" id="gx-fill" style="background:var(--r);"></div></div><span class="gbar-val" id="gx-val">0.0</span></div>
+          <div class="gbar-row"><span class="gbar-label">Y</span><div class="gbar-track"><div class="gbar-center"></div><div class="gbar-fill" id="gy-fill" style="background:var(--g);"></div></div><span class="gbar-val" id="gy-val">0.0</span></div>
+          <div class="gbar-row"><span class="gbar-label">Z</span><div class="gbar-track"><div class="gbar-center"></div><div class="gbar-fill" id="gz-fill" style="background:var(--b);"></div></div><span class="gbar-val" id="gz-val">0.0</span></div>
+        </div>
+      </div>
+
+      <!-- Accelerometer -->
+      <div style="display:flex;flex-direction:column;gap:4px;overflow:hidden;">
+        <div class="dsec-t" style="border:none;margin:0;padding:0;">// ACCÉLÉROMÈTRE (m/s²)</div>
+        <div class="avec-wrap">
+          <div class="avec-row"><span class="avec-label">X</span><div class="avec-bar"><div class="avec-fill" id="ax-fill" style="background:var(--r);"></div></div><span class="avec-val" id="ax-val">0.0</span></div>
+          <div class="avec-row"><span class="avec-label">Y</span><div class="avec-bar"><div class="avec-fill" id="ay-fill" style="background:var(--g);"></div></div><span class="avec-val" id="ay-val">0.0</span></div>
+          <div class="avec-row"><span class="avec-label">Z</span><div class="avec-bar"><div class="avec-fill" id="az-fill" style="background:var(--b);"></div></div><span class="avec-val" id="az-val">0.0</span></div>
+        </div>
+        <div style="font-size:.52rem;margin-top:2px;">
+          <span class="dlabel">TOTAL </span><span class="dval green" id="accel-total">0.0 m/s²</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- START SCREEN -->
+<div id="start">
+  <div class="slogo">NAV<br><span style="font-size:.4em;opacity:.5;letter-spacing:.6em">HUD MIL-SPEC</span></div>
+  <div class="ssub">// SYSTÈME DE NAVIGATION TACTIQUE //</div>
+  <div class="sfeats">
+    ✦ Boussole 3D avec horizon artificiel<br>
+    <em>✦ GPS temps réel — coords, altitude, vitesse</em><br>
+    ✦ Gyroscope 3 axes (°/s)<br>
+    <em>✦ Accéléromètre 3 axes (m/s²)</em><br>
+    ✦ Cap magnétique + roll + pitch
+  </div>
+  <button class="sbtn" onclick="boot()">▶ INITIALISER</button>
+  <div class="perms-note">Ce système demande l'accès à votre position GPS<br>et aux capteurs de mouvement du téléphone.</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════
+let heading  = 0;   // magnetic heading degrees
+let roll     = 0;   // degrees
+let pitch    = 0;   // degrees
+let lat=null, lon=null, alt=null, spd=null, gpsAcc=null;
+let gyro  = {x:0,y:0,z:0};
+let accel = {x:0,y:0,z:0};
+let startTime = null;
+let compassCanvas, compassCtx, horizonCanvas, horizonCtx;
+let booted = false;
+
+// ══════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════
+async function boot() {
+  document.getElementById('start').style.display='none';
+  startTime = performance.now();
+  booted = true;
+
+  setupCanvases();
+  window.addEventListener('resize', setupCanvases);
+  window.addEventListener('orientationchange', ()=>setTimeout(setupCanvases,400));
+
+  startClock();
+  startGPS();
+  startMotion();
+  requestAnimationFrame(render);
+}
+
+function setupCanvases() {
+  const cp = document.getElementById('compass-panel');
+  const cr = cp.getBoundingClientRect();
+  const avail = Math.min(cr.width - 24, cr.height - 120);
+  const cs = Math.max(60, Math.min(avail, 220));
+  compassCanvas = document.getElementById('compass-canvas');
+  compassCanvas.width = cs; compassCanvas.height = cs;
+  compassCtx = compassCanvas.getContext('2d');
+
+  const hp = document.getElementById('motion-panel').firstElementChild;
+  const hr = hp.getBoundingClientRect();
+  horizonCanvas = document.getElementById('horizon-canvas');
+  const hs = Math.min(hr.width - 10, 90);
+  horizonCanvas.width = hs; horizonCanvas.height = hs * 0.6;
+  horizonCtx = horizonCanvas.getContext('2d');
+}
+
+// ══════════════════════════════════════════════
+//  CLOCK
+// ══════════════════════════════════════════════
+function startClock() {
+  setInterval(()=>{
+    const now = new Date();
+    document.getElementById('htime').textContent =
+      now.toLocaleTimeString('fr',{hour12:false});
+    if (startTime) {
+      const s = Math.floor((performance.now()-startTime)/1000);
+      const m = Math.floor(s/60), ss = s%60;
+      document.getElementById('sys-up').textContent =
+        String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+    }
+  }, 1000);
+}
+
+// ══════════════════════════════════════════════
+//  GPS
+// ══════════════════════════════════════════════
+function startGPS() {
+  if (!navigator.geolocation) {
+    document.getElementById('sys-gps').textContent = 'INDISPO';
+    document.getElementById('sys-gps').style.color = 'var(--r)';
+    return;
+  }
+  document.getElementById('sys-gps').textContent = 'RECHERCHE';
+  document.getElementById('sys-gps').style.color = 'var(--o)';
+
+  navigator.geolocation.watchPosition(pos=>{
+    lat    = pos.coords.latitude;
+    lon    = pos.coords.longitude;
+    alt    = pos.coords.altitude;
+    spd    = pos.coords.speed;       // m/s
+    gpsAcc = pos.coords.accuracy;
+    const hdgGPS = pos.coords.heading;
+    if (hdgGPS !== null && hdgGPS !== undefined && !isNaN(hdgGPS)) {
+      // blend GPS heading with compass if available
+    }
+    document.getElementById('sys-gps').textContent = 'ACTIF';
+    document.getElementById('sys-gps').style.color = 'var(--g)';
+  }, err=>{
+    document.getElementById('sys-gps').textContent = 'ERREUR';
+    document.getElementById('sys-gps').style.color = 'var(--r)';
+  }, {enableHighAccuracy:true, maximumAge:1000, timeout:10000});
+}
+
+// ══════════════════════════════════════════════
+//  SENSORS (orientation + motion)
+// ══════════════════════════════════════════════
+function startMotion() {
+  // --- DeviceOrientation (compass + roll + pitch) ---
+  const orientHandler = (e) => {
+    if (e.webkitCompassHeading !== undefined) {
+      // iOS: webkitCompassHeading is magnetic heading 0–360
+      heading = e.webkitCompassHeading || 0;
+    } else if (e.alpha !== null) {
+      // Android: alpha is rotation around Z (0=north on some devices)
+      heading = (360 - e.alpha) % 360;
+    }
+    roll  = e.gamma || 0;   // tilt left/right  -90..90
+    pitch = e.beta  || 0;   // tilt front/back -180..180
+    document.getElementById('sys-gyro').textContent = 'ACTIF';
+    document.getElementById('sys-gyro').style.color = 'var(--g)';
+  };
+
+  if (typeof DeviceOrientationEvent !== 'undefined') {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      // iOS 13+ needs permission
+      DeviceOrientationEvent.requestPermission().then(state=>{
+        if (state==='granted') window.addEventListener('deviceorientation', orientHandler, true);
+        else { markSensorFail('gyro'); }
+      }).catch(()=>markSensorFail('gyro'));
+    } else {
+      window.addEventListener('deviceorientation', orientHandler, true);
+    }
+  } else { markSensorFail('gyro'); }
+
+  // --- DeviceMotion (accelerometer + gyroscope) ---
+  const motionHandler = (e) => {
+    if (e.rotationRate) {
+      gyro.x = e.rotationRate.beta  || 0;
+      gyro.y = e.rotationRate.gamma || 0;
+      gyro.z = e.rotationRate.alpha || 0;
+    }
+    if (e.accelerationIncludingGravity) {
+      accel.x = e.accelerationIncludingGravity.x || 0;
+      accel.y = e.accelerationIncludingGravity.y || 0;
+      accel.z = e.accelerationIncludingGravity.z || 0;
+    }
+    document.getElementById('sys-accel').textContent = 'ACTIF';
+    document.getElementById('sys-accel').style.color = 'var(--g)';
+  };
+
+  if (typeof DeviceMotionEvent !== 'undefined') {
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+      DeviceMotionEvent.requestPermission().then(state=>{
+        if (state==='granted') window.addEventListener('devicemotion', motionHandler);
+        else markSensorFail('accel');
+      }).catch(()=>markSensorFail('accel'));
+    } else {
+      window.addEventListener('devicemotion', motionHandler);
+    }
+  } else { markSensorFail('accel'); }
+}
+
+function markSensorFail(s) {
+  const id = s==='gyro' ? 'sys-gyro' : 'sys-accel';
+  document.getElementById(id).textContent = 'INDISPO';
+  document.getElementById(id).style.color = 'var(--r)';
+}
+
+// ══════════════════════════════════════════════
+//  RENDER LOOP
+// ══════════════════════════════════════════════
+function render() {
+  if (!booted) { requestAnimationFrame(render); return; }
+
+  // ── Compass canvas ──
+  if (compassCtx) drawCompass();
+
+  // ── Horizon canvas ──
+  if (horizonCtx) drawHorizon();
+
+  // ── Heading display ──
+  const hdgRound = Math.round(heading) % 360;
+  document.getElementById('hdg-num').textContent = String(hdgRound).padStart(3,'0')+'°';
+  document.getElementById('hdg-true').textContent = String(hdgRound).padStart(3,'0')+'°';
+  document.getElementById('hdg-card').textContent = headingToCard(hdgRound);
+
+  // ── Tape ──
+  updateTape(hdgRound);
+
+  // ── Roll / Pitch ──
+  document.getElementById('roll-val').textContent  = roll.toFixed(1)+'°';
+  document.getElementById('pitch-val').textContent = pitch.toFixed(1)+'°';
+
+  // ── GPS ──
+  if (lat !== null) {
+    document.getElementById('coords-lat').textContent = 'LAT: '+lat.toFixed(6)+'°';
+    document.getElementById('coords-lon').textContent = 'LON: '+lon.toFixed(6)+'°';
+  }
+  if (alt !== null) {
+    document.getElementById('alt-val').textContent = Math.round(alt);
+  }
+  if (spd !== null) {
+    document.getElementById('spd-val').textContent = (spd*3.6).toFixed(1);
+  }
+  if (gpsAcc !== null) {
+    const acc = Math.round(gpsAcc);
+    const el = document.getElementById('gps-acc');
+    el.textContent = acc+' m';
+    el.className = 'acc-badge '+(acc<10?'acc-high':acc<30?'acc-mid':'acc-low');
+  }
+
+  // ── Gyro bars ──
+  const MAX_GYRO = 200;
+  ['x','y','z'].forEach((ax,i)=>{
+    const v = gyro[ax];
+    const pct = Math.min(100, Math.abs(v)/MAX_GYRO*100);
+    const id = ['gx','gy','gz'][i];
+    const fill = document.getElementById(id+'-fill');
+    if (v>=0) { fill.style.left='50%'; fill.style.width=pct/2+'%'; }
+    else      { fill.style.left=(50-pct/2)+'%'; fill.style.width=pct/2+'%'; }
+    document.getElementById(id+'-val').textContent = v.toFixed(1);
+  });
+
+  // ── Accel bars ──
+  const MAX_A = 20;
+  ['x','y','z'].forEach((ax,i)=>{
+    const v = accel[ax];
+    const pct = Math.min(100, Math.abs(v)/MAX_A*100);
+    const id = ['ax','ay','az'][i];
+    document.getElementById(id+'-fill').style.width = pct+'%';
+    document.getElementById(id+'-val').textContent = v.toFixed(1);
+  });
+  const total = Math.sqrt(accel.x**2+accel.y**2+accel.z**2);
+  document.getElementById('accel-total').textContent = total.toFixed(2)+' m/s²';
+
+  requestAnimationFrame(render);
+}
+
+// ══════════════════════════════════════════════
+//  DRAW COMPASS
+// ══════════════════════════════════════════════
+function drawCompass() {
+  const cv = compassCanvas, cx = compassCtx;
+  const W = cv.width, H = cv.height;
+  const CX = W/2, CY = H/2, R = W/2 - 4;
+
+  cx.clearRect(0,0,W,H);
+
+  // Background glow rings
+  for (let i=3;i>=1;i--) {
+    cx.beginPath(); cx.arc(CX,CY,R,0,Math.PI*2);
+    cx.strokeStyle = `rgba(0,255,65,${0.04*i})`;
+    cx.lineWidth = i*8; cx.stroke();
+  }
+
+  cx.save();
+  cx.translate(CX,CY);
+  cx.rotate(-heading*Math.PI/180);
+
+  // Tick marks
+  for (let deg=0; deg<360; deg+=5) {
+    const rad = deg*Math.PI/180;
+    const isMajor = deg%90===0;
+    const isMed   = deg%45===0 && !isMajor;
+    const isSmall = deg%10===0 && !isMajor && !isMed;
+    const len = isMajor?16:isMed?10:isSmall?7:4;
+    const r0  = R-2, r1 = R-2-len;
+    cx.beginPath();
+    cx.moveTo(Math.sin(rad)*r0, -Math.cos(rad)*r0);
+    cx.lineTo(Math.sin(rad)*r1, -Math.cos(rad)*r1);
+    cx.strokeStyle = isMajor?'rgba(255,238,0,0.9)':isSmall?'rgba(0,255,65,0.5)':'rgba(0,255,65,0.3)';
+    cx.lineWidth = isMajor?2:1;
+    cx.stroke();
+  }
+
+  // Cardinal labels
+  const cards = [['N',0,'#ffee00'],['E',90,'#00ff41'],['S',180,'#00ff41'],['W',270,'#00ff41'],
+                  ['NE',45,'rgba(0,255,65,0.6)'],['SE',135,'rgba(0,255,65,0.6)'],
+                  ['SW',225,'rgba(0,255,65,0.6)'],['NW',315,'rgba(0,255,65,0.6)']];
+  cx.font = 'bold 10px "Share Tech Mono"';
+  cx.textAlign='center'; cx.textBaseline='middle';
+  cards.forEach(([lbl, deg, col])=>{
+    const rad=deg*Math.PI/180, tr=R-24;
+    cx.save(); cx.rotate(rad);
+    cx.fillStyle=col;
+    if (lbl==='N') cx.font='bold 13px "Orbitron",monospace';
+    else cx.font='9px "Share Tech Mono"';
+    cx.fillText(lbl,0,-tr);
+    cx.restore();
+  });
+
+  cx.restore(); // end rotate
+
+  // Outer ring
+  cx.beginPath(); cx.arc(CX,CY,R,0,Math.PI*2);
+  cx.strokeStyle='rgba(0,255,65,0.55)'; cx.lineWidth=2;
+  cx.shadowColor='rgba(0,255,65,0.4)'; cx.shadowBlur=10;
+  cx.stroke(); cx.shadowBlur=0;
+
+  // North pointer (fixed red arrow, always up)
+  cx.save(); cx.translate(CX,CY);
+  // Red up arrow
+  cx.beginPath();
+  cx.moveTo(0,-(R-30));
+  cx.lineTo(-7,-(R-50));
+  cx.lineTo(0,-(R-42));
+  cx.lineTo(7,-(R-50));
+  cx.closePath();
+  cx.fillStyle='var(--r)';
+  cx.shadowColor='var(--r)'; cx.shadowBlur=12;
+  cx.fill(); cx.shadowBlur=0;
+  cx.restore();
+
+  // Fixed heading triangle at top
+  cx.save(); cx.translate(CX,CY);
+  cx.beginPath();
+  cx.moveTo(0,-(R+2));
+  cx.lineTo(-6,-(R-10));
+  cx.lineTo(6,-(R-10));
+  cx.closePath();
+  cx.fillStyle='#ffee00';
+  cx.shadowColor='#ffee00'; cx.shadowBlur=8;
+  cx.fill(); cx.shadowBlur=0;
+  cx.restore();
+
+  // Centre dot
+  cx.beginPath(); cx.arc(CX,CY,3,0,Math.PI*2);
+  cx.fillStyle='rgba(0,255,65,0.7)'; cx.fill();
+}
+
+// ══════════════════════════════════════════════
+//  DRAW HORIZON
+// ══════════════════════════════════════════════
+function drawHorizon() {
+  const cv = horizonCanvas, cx = horizonCtx;
+  const W = cv.width, H = cv.height;
+  const CX = W/2, CY = H/2;
+
+  cx.clearRect(0,0,W,H);
+  cx.save();
+
+  // Clip oval
+  cx.beginPath(); cx.ellipse(CX,CY,W/2-1,H/2-1,0,0,Math.PI*2); cx.clip();
+
+  // Sky / Ground split rotated by roll
+  cx.save();
+  cx.translate(CX,CY);
+  cx.rotate(roll*Math.PI/180);
+
+  const pitchOffset = pitch * (H/90) * 0.5;
+
+  // Sky
+  cx.fillStyle='rgba(0,60,80,0.7)';
+  cx.fillRect(-W,-H/2-pitchOffset,W*2,H);
+
+  // Ground
+  cx.fillStyle='rgba(20,50,10,0.7)';
+  cx.fillRect(-W,0-pitchOffset,W*2,H);
+
+  // Horizon line
+  cx.strokeStyle='rgba(0,255,65,0.8)'; cx.lineWidth=1.5;
+  cx.beginPath(); cx.moveTo(-W,-pitchOffset); cx.lineTo(W,-pitchOffset); cx.stroke();
+
+  cx.restore();
+
+  // Fixed aircraft symbol
+  cx.strokeStyle='#ffee00'; cx.lineWidth=1.5;
+  cx.beginPath(); cx.moveTo(CX-16,CY); cx.lineTo(CX-6,CY); cx.stroke();
+  cx.beginPath(); cx.moveTo(CX+6,CY); cx.lineTo(CX+16,CY); cx.stroke();
+  cx.beginPath(); cx.arc(CX,CY,3,0,Math.PI*2); cx.strokeStyle='#ffee00'; cx.stroke();
+
+  // Border
+  cx.restore();
+  cx.beginPath(); cx.ellipse(CX,CY,W/2-1,H/2-1,0,0,Math.PI*2);
+  cx.strokeStyle='rgba(0,255,65,0.4)'; cx.lineWidth=1.5; cx.stroke();
+}
+
+// ══════════════════════════════════════════════
+//  HEADING TAPE
+// ══════════════════════════════════════════════
+let tapeBuilt = false;
+function buildTape() {
+  const ti = document.getElementById('tape-inner');
+  let html = '';
+  // 3 full rotations of marks
+  for (let rep=-1;rep<=1;rep++) {
+    for (let d=0;d<360;d+=5) {
+      const deg = d + rep*360;
+      const isMajor = d%90===0;
+      const isMed   = d%45===0&&!isMajor;
+      const isLabeled = d%10===0;
+      const lbl = isMajor ? ['N','E','S','W'][d/90] : (isLabeled ? d : '');
+      const cls = isMajor?'major':isMed?'minor':'minor';
+      html += `<div class="tape-mark ${cls}"><div class="tm-line"></div><div class="tm-label">${lbl}</div></div>`;
+    }
+  }
+  ti.innerHTML = html;
+  tapeBuilt = true;
+}
+function updateTape(hdg) {
+  if (!tapeBuilt) buildTape();
+  const tape = document.getElementById('tape');
+  const ti   = document.getElementById('tape-inner');
+  const markW = 30;
+  const total = 3*360/5;
+  const center = Math.floor(total/2)*markW;
+  const offset = (hdg/5)*markW;
+  ti.style.transform = `translateX(${tape.clientWidth/2 - center - offset + markW/2}px)`;
+}
+
+// ══════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════
+function headingToCard(h) {
+  const cards=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return cards[Math.round(h/22.5)%16];
+}
+</script>
+</body>
+</html>
